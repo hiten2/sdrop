@@ -331,9 +331,11 @@ class HTTPConnectionHandler:
 
     def __call__(self):
         """parse an HTTP header and execute the appropriate handler"""
+        request = Request()
+        
         try:
             self.conn.settimeout(self.timeout)
-            request = Request(self.conn.makefile())
+            request.fload(self.conn.makefile())
 
             with PRINT_LOCK:
                 print "Handling %s request for %s from %s:%u" % (
