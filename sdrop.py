@@ -153,11 +153,13 @@ class Request:
         self.headers.fload(self.fp)
 
 class RequestHandler:
-    def __init__(self, request, resolver = None):
+    def __init__(self, conn, remote, request, resolver = None):
         self.code = 200
+        self.conn = conn
         self.headers = Headers()
         self.headers["content-length"] = 0
         self.message = "OK"
+        self.remote = remote
         self.request = request
 
         if not resolver:
@@ -224,8 +226,7 @@ class GETHandler(RequestHandler):
                     break
                 
                 try:
-                    self.request.fp.write(chunk)
-                    self.request.fp.flush()
+                    self.conn.sendall(chunk)
                 except IOError:
                     break
                 content_length -= len(chunk)
@@ -329,8 +330,8 @@ class HTTPConnectionHandler:
                 print "Handling %s request for %s from %s:%u" % (
                     request.method, request.resource, self.remote[0],
                     self.remote[1])
-            HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](request,
-                self.resolver)()
+            HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](self.conn,
+                self.remote, request, self.resolver)()
         except Exception as e:
             with PRINT_LOCK:
                 print >> sys.stderr, "HTTPConnectionHandler.__call__:", e
