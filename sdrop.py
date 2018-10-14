@@ -128,22 +128,31 @@ class Headers(dict):
             + ['', ''])
 
 class Request:
-    def __init__(self, fp):
-        self.fp = fp
+    def __init__(self, headers = None, method = None, resource = None,
+            version = 0):
+        if not headers:
+            headers = Headers()
+        self.headers = headers
+        self.method = method
+        self.resource = resource
+        self.version = version
+
+    def fload(self, fp):
+        """load from a file-like object"""
         self.method = []
         self.resource = []
         self.version = []
         
         while not self.method or not self.method[-1] == ' ':
-            self.method.append(self.fp.read(1))
+            self.method.append(fp.read(1))
         self.method = ''.join(self.method).strip()
 
         while not self.resource or not self.resource[-1] == ' ':
-            self.resource.append(self.fp.read(1))
+            self.resource.append(fp.read(1))
         self.resource = ''.join(self.resource).strip()
         
         while not self.version or not self.version[-1] == '\n':
-            self.version.append(self.fp.read(1))
+            self.version.append(fp.read(1))
         self.version = ''.join(self.version).strip()
 
         if '/' in self.version:
