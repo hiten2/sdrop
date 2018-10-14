@@ -335,7 +335,6 @@ class HTTPConnectionHandler:
             with PRINT_LOCK:
                 print >> sys.stderr, "HTTPConnectionHandler.__call__:", e
         self.conn.close()
-        thread.exit()
 
 class SDropServer:
     """
