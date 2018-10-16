@@ -402,7 +402,7 @@ class SDropServer:
         self.resolver = resolver
         self.timeout = timeout
 
-    def serve_forever(self):
+    def __call__(self):
         self._sock.listen(self.backlog)
 
         with PRINT_LOCK:
@@ -432,4 +432,4 @@ if __name__ == "__main__":
     isolate = True
     root = os.getcwd()
     timeout = 0.1
-    SDropServer(address, backlog, timeout, isolate, root).serve_forever()
+    SDropServer(address, backlog, timeout, isolate, root)()
