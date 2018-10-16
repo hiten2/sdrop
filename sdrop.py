@@ -18,6 +18,7 @@ import os
 import socket
 import sys
 import thread
+import time
 
 __doc__ = "sdrop - a temporary file drop server"
 
@@ -238,10 +239,10 @@ class GETHandler(RequestHandler):
             while content_length:
                 try:
                     chunk = fp.read(http_bufsize(content_length))
-                    fp.seek(-len(chunk), os.SEEK_CUR)
-                    fp.write(os.urandom(len(chunk))) # shred
-                    fp.flush()
-                    os.fdatasync(fp)
+                    #fp.seek(-len(chunk), os.SEEK_CUR)
+                    #fp.write(os.urandom(len(chunk))) # shred
+                    #fp.flush()
+                    #os.fdatasync(fp)
                 except IOError:
                     break
                 
@@ -253,7 +254,7 @@ class GETHandler(RequestHandler):
             self.headers["content-length"] -= content_length
             
             try:
-                os.unlink(path)
+                pass#os.unlink(path)
             except OSError:
                 pass
             
@@ -369,7 +370,7 @@ class SDropServer:
     connection timeouts default to None
     """
     
-    def __init__(self, address = ('', 8000), backlog = 1, timeout = 0.1,
+    def __init__(self, address = ('', 8000), backlog = 10, timeout = 0.1,
             isolate = True, root = os.getcwd()):
         self.address = address
         self.backlog = backlog
@@ -387,6 +388,7 @@ class SDropServer:
         self.timeout = timeout
 
     def serve_forever(self):
+        sleep = 1.0 / self.backlog
         self._sock.listen(self.backlog)
 
         with PRINT_LOCK:
@@ -394,6 +396,8 @@ class SDropServer:
 
         try:
             while 1:
+                time.sleep(sleep)
+                
                 try:
                     conn, remote = self._sock.accept()
                 except socket.timeout:
@@ -414,7 +418,7 @@ class SDropServer:
 
 if __name__ == "__main__":
     address = ('', 8000)
-    backlog = 1
+    backlog = 10
     isolate = True
     root = os.getcwd()
     timeout = 0.1
