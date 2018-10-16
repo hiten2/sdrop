@@ -13,12 +13,16 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__package__ = "sdrop"
+
 import fcntl
 import os
 import socket
 import sys
 import thread
 import time
+
+import threaded
 
 __doc__ = "sdrop - a temporary file drop server"
 
@@ -374,7 +378,7 @@ class HTTPConnectionHandler(BaseHandler):
         finally:
             self.conn.close()
 
-class SDropServer:
+class SDropServer(threaded.Threaded):
     """
     simple, pure-python HTTP server
 
@@ -384,8 +388,9 @@ class SDropServer:
     connection timeouts default to None
     """
     
-    def __init__(self, address = ('', 8000), backlog = 10, timeout = 0.1,
-            isolate = True, root = os.getcwd()):
+    def __init__(self, address = ('', 8000), backlog = 10, isolate = True,
+            nthreads = 1, root = os.getcwd(), timeout = 0.1):
+        threaded.Threaded.__init__(self, nthreads)
         self.address = address
         self.backlog = backlog
         self.sleep = 1.0 / self.backlog
@@ -413,9 +418,9 @@ class SDropServer:
                 time.sleep(self.sleep)
                 
                 try:
-                    thread.start_new_thread(HTTPConnectionHandler(
+                    self.allocate_thread(HTTPConnectionHandler(
                         *self._sock.accept(), resolver = self.resolver,
-                        timeout = self.timeout, server = self).__call__, ())
+                        timeout = self.timeout, server = self).__call__)
                 except socket.timeout:
                     pass
         except KeyboardInterrupt:
@@ -430,6 +435,7 @@ if __name__ == "__main__":
     address = ('', 8000)
     backlog = 10
     isolate = True
+    nthreads = 1
     root = os.getcwd()
     timeout = 0.1
-    SDropServer(address, backlog, timeout, isolate, root)()
+    SDropServer(address, backlog, isolate, nthreads, root, timeout)()
