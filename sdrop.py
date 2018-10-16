@@ -34,6 +34,13 @@ def http_bufsize(max):
         exp += 1
     return 2 << (exp - 1)
 
+class BaseHandler:
+    def __init__(self, server):
+        self.server = server
+
+    def __call__(self):
+        raise NotImplementedError()
+
 class Headers(dict):
     """
     a dictionary of strings mapped to values
@@ -174,8 +181,10 @@ class Request:
         self.headers = Headers()
         self.headers.fload(fp)
 
-class RequestHandler:
-    def __init__(self, conn, remote, request, resolver = None):
+class RequestHandler(BaseHandler):
+    def __init__(self, conn, remote, request, resolver = None, *args,
+            **kwargs):
+        BaseHandler.__init__(self, *args, **kwargs)
         self.code = 200
         self.conn = conn
         self.headers = Headers()
@@ -239,10 +248,10 @@ class GETHandler(RequestHandler):
             while content_length:
                 try:
                     chunk = fp.read(http_bufsize(content_length))
-                    #fp.seek(-len(chunk), os.SEEK_CUR)
-                    #fp.write(os.urandom(len(chunk))) # shred
-                    #fp.flush()
-                    #os.fdatasync(fp)
+                    fp.seek(-len(chunk), os.SEEK_CUR)
+                    fp.write(os.urandom(len(chunk))) # shred
+                    fp.flush()
+                    os.fdatasync(fp)
                 except IOError:
                     break
                 
@@ -251,10 +260,11 @@ class GETHandler(RequestHandler):
                 except IOError:
                     break
                 content_length -= len(chunk)
+                time.sleep(self.server.sleep)
             self.headers["content-length"] -= content_length
             
             try:
-                pass#os.unlink(path)
+                os.unlink(path)
             except OSError:
                 pass
             
@@ -319,6 +329,7 @@ class POSTHandler(RequestHandler):
                     self.message = "Internal Server Error"
                     break
                 content_length -= len(chunk)
+                time.sleep(self.server.sleep)
             
             try:
                 fcntl.flock(fp.fileno(), fcntl.LOCK_UN)
@@ -332,10 +343,12 @@ class POSTHandler(RequestHandler):
                 pass
         RequestHandler.__call__(self) # send response header
 
-class HTTPConnectionHandler:
+class HTTPConnectionHandler(BaseHandler):
     METHOD_TO_HANDLER = {"GET": GETHandler, "POST": POSTHandler}
 
-    def __init__(self, conn, remote, resolver = None, timeout = None):
+    def __init__(self, conn, remote, resolver = None, timeout = None, *args,
+            **kwargs):
+        BaseHandler.__init__(self, *args, **kwargs)
         self.conn = conn
         self.remote = remote
         self.resolver = resolver
@@ -354,8 +367,8 @@ class HTTPConnectionHandler:
                     request.method, request.resource, self.remote[0],
                     self.remote[1])
             HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](self.conn,
-                self.remote, request, self.resolver)()
-        except KeyboardInterrupt as e:#Exception as e:
+                self.remote, request, self.resolver, self.server)()
+        except Exception as e:
             with PRINT_LOCK:
                 print >> sys.stderr, "HTTPConnectionHandler.__call__:", e
         self.conn.close()
@@ -374,6 +387,7 @@ class SDropServer:
             isolate = True, root = os.getcwd()):
         self.address = address
         self.backlog = backlog
+        self.sleep = 1.0 / self.backlog
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.bind(self.address)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -388,7 +402,6 @@ class SDropServer:
         self.timeout = timeout
 
     def serve_forever(self):
-        sleep = 1.0 / self.backlog
         self._sock.listen(self.backlog)
 
         with PRINT_LOCK:
@@ -396,18 +409,14 @@ class SDropServer:
 
         try:
             while 1:
-                time.sleep(sleep)
+                time.sleep(self.sleep)
                 
                 try:
-                    conn, remote = self._sock.accept()
+                    thread.start_new_thread(HTTPConnectionHandler(
+                        *self._sock.accept(), resolver = self.resolver,
+                        timeout = self.timeout, server = self).__call__, ())
                 except socket.timeout:
-                    continue
-                except socket.error as e:
-                    with PRINT_LOCK:
-                        print >> sys.stderr, "SDropServer.serve_forever:", e
-                    continue
-                thread.start_new_thread(HTTPConnectionHandler(conn, remote,
-                    self.resolver, self.timeout).__call__, ())
+                    pass
         except KeyboardInterrupt:
             pass
 
