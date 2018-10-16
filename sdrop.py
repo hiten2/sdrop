@@ -75,7 +75,10 @@ class Headers(dict):
         line = []
 
         while not ''.join(line) in ("\n", "\r\n"): # read the headers
-            line.append(fp.read(1))
+            try:
+                line.append(fp.read(1))
+            except socket.timeout:
+                continue
 
             if line and line[-1] == '\n':
                 if ':' in line:
@@ -144,22 +147,31 @@ class Request:
         self.version = []
         
         while not self.method or not self.method[-1] == ' ':
-            self.method.append(fp.read(1))
+            try:
+                self.method.append(fp.read(1))
+            except socket.timeout:
+                pass
         self.method = ''.join(self.method).strip()
 
         while not self.resource or not self.resource[-1] == ' ':
-            self.resource.append(fp.read(1))
+            try:
+                self.resource.append(fp.read(1))
+            except socket.timeout:
+                pass
         self.resource = ''.join(self.resource).strip()
         
         while not self.version or not self.version[-1] == '\n':
-            self.version.append(fp.read(1))
+            try:
+                self.version.append(fp.read(1))
+            except socket.timeout:
+                pass
         self.version = ''.join(self.version).strip()
 
         if '/' in self.version:
             self.version = self.version[self.version.rfind('/') + 1:]
         self.version = float(self.version)
         self.headers = Headers()
-        self.headers.fload(self.fp)
+        self.headers.fload(fp)
 
 class RequestHandler:
     def __init__(self, conn, remote, request, resolver = None):
@@ -185,10 +197,9 @@ class RequestHandler:
         return os.path.realpath(resource)
 
     def respond(self):
-        self.request.fp.write("HTTP/%.1f %u %s\r\n" % (
-            float(self.version), int(self.code), str(self.message)))
-        self.request.fp.write(str(self.headers)) # includes the terminator
-        self.request.fp.flush()
+        self.conn.sendall("HTTP/%.1f %u %s\r\n" % (
+            float(self.version), int(self.code), str(self.message))
+            + str(self.headers)) # includes the terminator
 
 class GETHandler(RequestHandler):
     def __init__(self, *args, **kwargs):
@@ -294,7 +305,7 @@ class POSTHandler(RequestHandler):
         if locked: # fp is inherently open
             while content_length:
                 try:
-                    chunk = self.request.fp.read(http_bufsize(content_length))
+                    chunk = self.conn.recv(http_bufsize(content_length))
                 except socket.error:
                     break
 
@@ -343,7 +354,7 @@ class HTTPConnectionHandler:
                     self.remote[1])
             HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](self.conn,
                 self.remote, request, self.resolver)()
-        except Exception as e:
+        except KeyboardInterrupt as e:#Exception as e:
             with PRINT_LOCK:
                 print >> sys.stderr, "HTTPConnectionHandler.__call__:", e
         self.conn.close()
