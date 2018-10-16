@@ -371,7 +371,8 @@ class HTTPConnectionHandler(BaseHandler):
         except Exception as e:
             with PRINT_LOCK:
                 print >> sys.stderr, "HTTPConnectionHandler.__call__:", e
-        self.conn.close()
+        finally:
+            self.conn.close()
 
 class SDropServer:
     """
@@ -419,11 +420,11 @@ class SDropServer:
                     pass
         except KeyboardInterrupt:
             pass
-
-        with PRINT_LOCK:
-            print "Shutting down sdrop server..."
-        self._sock.shutdown(socket.SHUT_RDWR)
-        self._sock.close()
+        finally:
+            with PRINT_LOCK:
+                print "Shutting down sdrop server..."
+            self._sock.shutdown(socket.SHUT_RDWR)
+            self._sock.close()
 
 if __name__ == "__main__":
     address = ('', 8000)
