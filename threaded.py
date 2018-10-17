@@ -34,10 +34,11 @@ class Threaded:
     allocates up to N additional threads for function calls (w/ blocking)
     or run function calls in the current thread if nthreads == 0
 
-    output is optionally stored into self.output_queue
-
     when nthreads == 0, tasks are executed in the calling thread
     when nthreads < 0, tasks are always executed in a new thread
+
+    when queue_output evaluates to True, function call information is
+    queued into .output_queue as FuncInfo instances
     """
     
     def __init__(self, nthreads = 1, queue_output = False):
@@ -74,7 +75,7 @@ class Threaded:
         except Exception as output:
             pass
 
-        if isinstance(self.output_queue, FuncQueue):
+        if isinstance(self.output_queue, Queue.Queue):
             self.output_queue.put(FuncInfo(func, output, *args, **kwargs))
 
         if self.nthreads:
