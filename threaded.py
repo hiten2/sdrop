@@ -66,6 +66,8 @@ class Threaded:
                 tuple([func] + list(args)), kwargs)
         else:
             with self._allocation_lock: # block
+                with self._nactive_threads_lock:
+                    self.nactive_threads += 1
                 self._handle_thread(func, *args, **kwargs)
 
     def _handle_thread(self, func, *args, **kwargs):
