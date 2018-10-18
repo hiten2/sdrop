@@ -86,7 +86,7 @@ class Headers(dict):
         """load from a file-like object"""
         line = []
 
-        while not ''.join(line) in ("\n", "\r\n"): # read the headers
+        while not "".join(line) in ("\n", "\r\n"): # read the headers
             try:
                 line.append(fp.read(1))
             except socket.timeout:
@@ -94,7 +94,7 @@ class Headers(dict):
 
             if line and line[-1] == '\n':
                 if ':' in line:
-                    k, v = ''.join(line).split(':', 1)
+                    k, v = "".join(line).split(':', 1)
                     v = v.strip()
 
                     for _type in (int, float): # cast numerics
@@ -105,8 +105,8 @@ class Headers(dict):
                             pass
                     self.add(k.strip(), v)
                     line = []
-                elif ''.join(line).rstrip("\r\n"):
-                    line = list(''.join(line).strip() + ' ') # multiline
+                elif "".join(line).rstrip("\r\n"):
+                    line = list("".join(line).strip() + ' ') # multiline
     
     def get(self, key, default = None):
         if not isinstance(key, str):
@@ -140,7 +140,7 @@ class Headers(dict):
             else:
                 pairs.append((k, v))
         return "\r\n".join([": ".join((k, str(v))) for k, v in pairs]
-            + ['', ''])
+            + ["", ""])
 
 class Request:
     def __init__(self, headers = None, method = None, resource = None,
@@ -163,21 +163,21 @@ class Request:
                 self.method.append(fp.read(1))
             except socket.timeout:
                 pass
-        self.method = ''.join(self.method).strip()
+        self.method = "".join(self.method).strip()
 
         while not self.resource or not self.resource[-1] == ' ':
             try:
                 self.resource.append(fp.read(1))
             except socket.timeout:
                 pass
-        self.resource = ''.join(self.resource).strip()
+        self.resource = "".join(self.resource).strip()
         
         while not self.version or not self.version[-1] == '\n':
             try:
                 self.version.append(fp.read(1))
             except socket.timeout:
                 pass
-        self.version = ''.join(self.version).strip()
+        self.version = "".join(self.version).strip()
 
         if '/' in self.version:
             self.version = self.version[self.version.rfind('/') + 1:]
@@ -388,7 +388,7 @@ class SDropServer(threaded.Threaded):
     connection timeouts default to None
     """
     
-    def __init__(self, address = ('', 8000), backlog = 10, isolate = True,
+    def __init__(self, address = ("", 8000), backlog = 10, isolate = True,
             nthreads = 1, root = os.getcwd(), timeout = 0.1):
         threaded.Threaded.__init__(self, nthreads)
         self.address = address
@@ -432,7 +432,7 @@ class SDropServer(threaded.Threaded):
             self._sock.close()
 
 if __name__ == "__main__":
-    address = ('', 8000)
+    address = ("", 8000)
     backlog = 10
     isolate = True
     nthreads = 1
