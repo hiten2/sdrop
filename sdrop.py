@@ -394,7 +394,12 @@ class SDropServer(threaded.Threaded):
         self.address = address
         self.backlog = backlog
         self.sleep = 1.0 / self.backlog
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        af = socket.AF_INET
+
+        for addrinfo in socket.getaddrinfo(None, 0):
+            af = addrinfo[0]
+            break
+        self._sock = socket.socket(af, socket.SOCK_STREAM)
         self._sock.bind(self.address)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
