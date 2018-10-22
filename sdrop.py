@@ -426,7 +426,7 @@ class SDropServer(threaded.Threaded):
                 time.sleep(self.sleep)
                 
                 try:
-                    self.allocate_thread(HTTPConnectionHandler(
+                    self.execute(HTTPConnectionHandler(
                         *self._sock.accept(), resolver = self.resolver,
                         timeout = self.timeout, server = self).__call__)
                 except socket.timeout:
