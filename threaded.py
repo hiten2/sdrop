@@ -96,7 +96,13 @@ class Threaded(Queue.Queue):
                 self.nactive_threads -= 1
 
 class Iterative(Threaded):
-    def __init__(self, nthreads = -1, queue_output = False, sleep = 0.001):
+    """
+    when nthreads > 0, distributes tasks between a set number of handlers
+
+    otherwise, uses Threaded's default behavior
+    """
+    
+    def __init__(self, nthreads = 1, queue_output = False, sleep = 0.001):
         Threaded.__init__(self, nthreads, queue_output)
         self.alive = True
         self._alive_lock = thread.allocate_lock()
@@ -110,10 +116,6 @@ class Iterative(Threaded):
                 thread.start_new_thread(self._slave, ())
         else: # use base behavior
             self.execute = lambda *a, **k: Threaded.execute(self, *a, **k)
-
-    def execute(self, func, *args, **kwargs):
-        """add the task to the queue"""
-        self._input_queue.put(FuncInfo(func, None, *args, **kwargs))
 
     def kill_all(self):
         """passively attempt to kill all the threads"""
@@ -142,3 +144,7 @@ class Iterative(Threaded):
 
                 if isinstance(self.output_queue, Queue.Queue):
                     self.output_queue.put(funcinfo)
+
+    def task(self, func, *args, **kwargs):
+        """add the task to the queue"""
+        self._input_queue.put(FuncInfo(func, None, *args, **kwargs))
