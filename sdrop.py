@@ -26,6 +26,13 @@ import threaded
 
 __doc__ = "sdrop - a temporary file drop server"
 
+global AF
+AF = socket.AF_INET # latest address family
+
+for addrinfo in socket.getaddrinfo(None, 0):
+    AF = addrinfo[0]
+    break
+
 global PRINT_LOCK # global synchronization mechanism
 PRINT_LOCK = thread.allocate_lock()
 
@@ -388,18 +395,14 @@ class SDropServer(threaded.Threaded):
     connection timeouts default to None
     """
     
-    def __init__(self, address = ("", 8000), backlog = 10, isolate = True,
-            nthreads = 1, root = os.getcwd(), timeout = 0.1):
+    def __init__(self, address = ("", 8000), af = AF, backlog = 10,
+            isolate = True, nthreads = 1, root = os.getcwd(), timeout = 0.1):
         threaded.Threaded.__init__(self, nthreads)
         self.address = address
+        self.af = af
         self.backlog = backlog
         self.sleep = 1.0 / self.backlog
-        af = socket.AF_INET
-
-        for addrinfo in socket.getaddrinfo(None, 0):
-            af = addrinfo[0]
-            break
-        self._sock = socket.socket(af, socket.SOCK_STREAM)
+        self._sock = socket.socket(self.af, socket.SOCK_STREAM)
         self._sock.bind(self.address)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
