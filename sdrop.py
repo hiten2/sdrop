@@ -21,10 +21,11 @@ import socket
 import sys
 import thread
 import time
+import traceback
 
 import baseserver
 
-__doc__ = "sdrop - a temporary file drop server"#######integrate baseserver
+__doc__ = "sdrop - a temporary file drop server"#############steps
 
 global AF
 AF = socket.AF_INET # latest address family
@@ -44,13 +45,6 @@ def http_bufsize(max):
     while 2 << exp <= max:
         exp += 1
     return 2 << (exp - 1)
-
-class BaseHandler:
-    def __init__(self, server):
-        self.server = server
-
-    def __call__(self):
-        raise NotImplementedError()
 
 class Headers(dict):
     """
@@ -192,47 +186,37 @@ class Request:
         self.headers = Headers()
         self.headers.fload(fp)
 
-class RequestHandler(BaseHandler):
-    def __init__(self, conn, remote, request, resolver = None, *args,
-            **kwargs):
-        BaseHandler.__init__(self, *args, **kwargs)
-        self.code = 200
-        self.conn = conn
-        self.headers = Headers()
-        self.headers["content-length"] = 0
-        self.message = "OK"
-        self.remote = remote
+class RequestEvent(baseserver.event.ConnectionEvent):
+    def __init__(self, request, *args, **kwargs):
+        baseserver.event.ConnectionEvent.__init__(self, *args, **kwargs)
         self.request = request
 
-        if not resolver:
-            resolver = self.default_resolver
-        self.resolver = resolver
-        self.version = request.version
+class RequestHandler(baseserver.eventhandler.EventHandler):
+    def __init__(self, *args, **kwargs):
+        baseserver.eventhandler.EventHandler.__init__(self, *args, **kwargs)
+        self.code = 200
+        self.headers = Headers()
+        self.headers["connection"] = "close"
+        self.headers["content-length"] = 0
+        self.message = "OK"
 
-    def __call__(self):
-        """subclasses must call or override this function"""
+    def next(self):
         self.respond()
-    
-    def default_resolver(self, resource):
-        """UNSAFE resource resolver"""
-        return os.path.realpath(resource)
+        raise StopIteration()
 
     def respond(self):
-        self.conn.sendall("HTTP/%.1f %u %s\r\n" % (
-            float(self.version), int(self.code), str(self.message))
-            + str(self.headers)) # includes the terminator
+        self.event.conn.sendall("HTTP/%.1f %u %s\r\n" % (
+            float(self.event.request.version), int(self.code),
+            str(self.message)) + str(self.headers)) # includes terminator
 
 class GETHandler(RequestHandler):
-    def __init__(self, *args, **kwargs):
-        RequestHandler.__init__(self, *args, **kwargs)
-
-    def __call__(self):
+    def next(self):
         content_length = -1
         fp = None
         locked = False
-        path = self.resolver(self.request.resource)
+        path = self.event.server.resolver(self.event.request.resource)
         
-        if os.path.exists(path):
+        if os.path.exists(path) and not os.path.isdir(path):
             try:
                 fp = open(path, "r+b")
                 fp.seek(0, os.SEEK_END)
@@ -253,7 +237,7 @@ class GETHandler(RequestHandler):
             except IOError:
                 self.code = 500
                 self.message = "Internal Server Error"
-        RequestHandler.__call__(self) # send response header
+        RequestHandler.respond(self) # send response header
         
         if locked: # fp is inherently open
             while content_length:
@@ -267,12 +251,11 @@ class GETHandler(RequestHandler):
                     break
                 
                 try:
-                    self.conn.sendall(chunk)
+                    self.event.conn.sendall(chunk)
                 except IOError:
                     break
                 content_length -= len(chunk)
                 time.sleep(self.server.sleep)
-            self.headers["content-length"] -= content_length
             
             try:
                 os.unlink(path)
@@ -289,22 +272,20 @@ class GETHandler(RequestHandler):
                 fp.close()
             except (IOError, OSError):
                 pass
+        raise StopIteration()
 
 class POSTHandler(RequestHandler):
-    def __init__(self, *args, **kwargs):
-        RequestHandler.__init__(self, *args, **kwargs)
-
-    def __call__(self):
+    def next(self):
         content_length = -1
-
+        
         try:
-            content_length = self.request.headers["content-length"]
+            content_length = self.event.request.headers["content-length"]
         except KeyError:
             self.code = 411
             self.message = "Length Required"
         fp = None
         locked = False
-        path = self.resolver(self.request.resource)
+        path = self.event.server.resolver(self.event.request.resource)
         
         if os.path.exists(path):
             self.code = 409
@@ -327,7 +308,7 @@ class POSTHandler(RequestHandler):
         if locked: # fp is inherently open
             while content_length:
                 try:
-                    chunk = self.conn.recv(http_bufsize(content_length))
+                    chunk = self.event.conn.recv(http_bufsize(content_length))
                 except socket.error:
                     break
 
@@ -340,7 +321,7 @@ class POSTHandler(RequestHandler):
                     self.message = "Internal Server Error"
                     break
                 content_length -= len(chunk)
-                time.sleep(self.server.sleep)
+                time.sleep(self.event.server.sleep)
             
             try:
                 fcntl.flock(fp.fileno(), fcntl.LOCK_UN)
@@ -352,40 +333,38 @@ class POSTHandler(RequestHandler):
                 fp.close()
             except (IOError, OSError):
                 pass
-        RequestHandler.__call__(self) # send response header
+        RequestHandler.next(self) # send response header and stop iteration
 
-class HTTPConnectionHandler(BaseHandler):
+class HTTPConnectionHandler(baseserver.eventhandler.EventHandler):
     METHOD_TO_HANDLER = {"GET": GETHandler, "POST": POSTHandler}
-
-    def __init__(self, conn, remote, resolver = None, timeout = None, *args,
-            **kwargs):
-        BaseHandler.__init__(self, *args, **kwargs)
-        self.conn = conn
-        self.remote = remote
-        self.resolver = resolver
-        self.timeout = timeout
-
-    def __call__(self):
+    
+    def next(self):
         """parse an HTTP header and execute the appropriate handler"""
+        address_string = baseserver.straddress.straddress(self.event.remote)
         request = Request()
         
         try:
-            self.conn.settimeout(self.timeout)
-            request.fload(self.conn.makefile())
+            self.event.conn.settimeout(self.event.server.timeout)
+            request.fload(self.event.conn.makefile())
 
-            with PRINT_LOCK:
-                print "Handling %s request for %s from %s:%u" % (
-                    request.method, request.resource, self.remote[0],
-                    self.remote[1])
-            HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](self.conn,
-                self.remote, request, self.resolver, self.server)()
+            self.event.server.sprint("Handling", request.method, "request for",
+                request.resource, "from", address_string)
+            HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](
+                RequestEvent(request, self.event.conn, self.event.remote,
+                    self.event.server))()
         except Exception as e:
-            with PRINT_LOCK:
-                print >> sys.stderr, "HTTPConnectionHandler.__call__:", e
+            try:
+                self.event.server.sfprint(sys.stderr,
+                    "ERROR while handling connection with %s:\n" % address_string,
+                    traceback.format_exc())
+            except Exception as e:
+                print e
         finally:
-            self.conn.close()
+            self.event.server.sprint("Closing connection with", address_string)
+            self.event.conn.close()
+        raise StopIteration()
 
-class SDropServer(threaded.Threaded):
+class Server(baseserver.server.BaseTCPServer):
     """
     simple, pure-python HTTP server
 
@@ -395,55 +374,26 @@ class SDropServer(threaded.Threaded):
     connection timeouts default to None
     """
     
-    def __init__(self, address = ("", 8000), af = AF, backlog = 10,
-            isolate = True, nthreads = 1, root = os.getcwd(), timeout = 0.1):
-        threaded.Threaded.__init__(self, nthreads)
-        self.address = address
-        self.af = af
-        self.backlog = backlog
-        self.sleep = 1.0 / self.backlog
-        self._sock = socket.socket(self.af, socket.SOCK_STREAM)
-        self._sock.bind(self.address)
-        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self._sock.settimeout(timeout)
-        resolver = lambda r: os.path.join(root, r)
-
+    def __init__(self, event_class = baseserver.event.ConnectionEvent,
+            event_handler_class = HTTPConnectionHandler, address = None,
+            backlog = 100, buflen = 65536, conn_inactive = None,
+            conn_sleep = 0.001, isolate = True, name = "sdrop", nthreads = -1,
+            root = os.getcwd(), timeout = 0.001):
+        baseserver.server.BaseTCPServer.__init__(self, event_class,
+            event_handler_class, address, backlog, buflen, conn_inactive,
+            conn_sleep, name, nthreads, timeout)
+        resolver = lambda r: r
+        
         if isolate:
-            resolver = lambda r: os.path.join(root,
-                os.path.normpath(r.lstrip('/')))
-        self.resolver = resolver
+            resolver = lambda r: os.path.normpath(r)
+        self.resolver = lambda r: os.path.join(root, resolver(r))
+        self.root = root
         self.timeout = timeout
 
-    def __call__(self):
-        self._sock.listen(self.backlog)
-
-        with PRINT_LOCK:
-            print "Serving sdrop HTTP requests on %s:%u" % self.address
-
-        try:
-            while 1:
-                time.sleep(self.sleep)
-                
-                try:
-                    self.execute(HTTPConnectionHandler(
-                        *self._sock.accept(), resolver = self.resolver,
-                        timeout = self.timeout, server = self).__call__)
-                except socket.timeout:
-                    pass
-        except KeyboardInterrupt:
-            pass
-        finally:
-            with PRINT_LOCK:
-                print "Shutting down sdrop server..."
-            self._sock.shutdown(socket.SHUT_RDWR)
-            self._sock.close()
+class IterativeServer(Server, baseserver.server.threaded.Iterative):
+    def __init__(self, *args, **kwargs):
+        Server.__init__(self, *args, **kwargs)
+        baseserver.server.threaded.Iterative.__init__(self, self.nthreads)
 
 if __name__ == "__main__":
-    address = ("", 8000)
-    backlog = 10
-    isolate = True
-    nthreads = 1
-    root = os.getcwd()
-    timeout = 0.1
-    SDropServer(address, backlog, isolate, nthreads, root, timeout)()
+    Server()()#address = ("", 8000))()
