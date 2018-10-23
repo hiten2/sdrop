@@ -22,9 +22,9 @@ import sys
 import thread
 import time
 
-import threaded
+import baseserver
 
-__doc__ = "sdrop - a temporary file drop server"
+__doc__ = "sdrop - a temporary file drop server"#######integrate baseserver
 
 global AF
 AF = socket.AF_INET # latest address family
