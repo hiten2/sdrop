@@ -23,7 +23,7 @@ import thread
 import time
 import traceback
 
-import baseserver
+from lib import baseserver
 
 __doc__ = "sdrop - a temporary file drop server"#############steps
 

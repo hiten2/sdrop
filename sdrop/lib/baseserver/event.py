@@ -18,27 +18,32 @@ __package__ = "baseserver"
 __doc__ = "events"
 
 class Event:
-    def __init__(self):
-        pass
+    def __init__(self, parent = None):
+        self.parent = parent
 
 class ServerEvent(Event):
-    def __init__(self, server):
-        Event.__init__(self)
+    def __init__(self, server, *args, **kwargs):
+        Event.__init__(self, *args, **kwargs)
         self.server = server
 
 class ConnectionEvent(ServerEvent):
-    def __init__(self, conn, remote, server):
-        ServerEvent.__init__(self, server)
+    def __init__(self, conn, remote, *args, **kwargs):
+        ServerEvent.__init__(self, *args, **kwargs)
         self.conn = conn
         self.remote = remote
 
 class DatagramEvent(ServerEvent):
-    def __init__(self, datagram, remote, server):
-        ServerEvent.__init__(self, server)
+    def __init__(self, datagram, remote, *args, **kwargs):
+        ServerEvent.__init__(self, *args, **kwargs)
         self.datagram = datagram
         self.remote = remote
 
-class DummyEvent(ServerEvent):
-    def __init__(self, event, remote, server):
-        ServerEvent.__init__(self, server)
+class DummyServerEvent(ServerEvent):
+    def __init__(self, event, remote, *args, **kwargs):
+        ServerEvent.__init__(self, *args, **kwargs)
         self.event = event
+
+class ThreadedEvent(Event):
+    def __init__(self, *args, **kwargs):
+        Event.__init__(self, *args, **kwargs)
+        self.threaded = self.parent

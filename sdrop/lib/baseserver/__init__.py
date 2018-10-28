@@ -17,8 +17,8 @@ __package__ = "baseserver"
 
 import event
 import eventhandler
+from lib import threaded
 import server
-import steppable
 import straddress
 
 __doc__ = "a simple server framework"
