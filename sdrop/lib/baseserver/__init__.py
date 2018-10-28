@@ -13,12 +13,12 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-__package__ = "baseserver"
+__package__ = __name__
 
 import event
 import eventhandler
-from lib import threaded
 import server
 import straddress
+from lib import threaded
 
 __doc__ = "a simple server framework"

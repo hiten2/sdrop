@@ -13,8 +13,6 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-__package__ = "baseserver"
-
 import os
 import sys
 
@@ -22,16 +20,16 @@ from lib import threaded
 
 __doc__ = "event handling framework"
 
-class EventHandler(threaded.IterativeTask):
+class EventHandler(threaded.IterableTask):
     """
     the base class for an event handler
 
-    this SHOULD be steppable, though overriding __call__ is acceptable
+    this SHOULD be iterable, though overriding __call__ is acceptable
     when stepping isn't necessary
     """
     
     def __init__(self, event, parent = None):
-        steppable.Steppable.__init__(self)
+        threaded.IterableTask.__init__(self)
         self.event = event
         self.parent = parent
 
@@ -65,4 +63,4 @@ class ForkingEventHandler(EventHandler):
                 if kill_parent:
                     sys.exit(0)
                 return
-        threaded.IterativeTask.__call__(self)
+        threaded.IterableTask.__call__(self)

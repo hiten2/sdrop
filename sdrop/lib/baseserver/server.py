@@ -13,8 +13,6 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-__package__ = "baseserver"
-
 import socket
 import sys
 import thread
@@ -22,26 +20,28 @@ import time
 
 import event
 import eventhandler
+from lib import threaded
 import straddress
-import threaded
 
 __doc__ = "server core implementation"
+
+def best_address(port = 0):
+    """return the best default address"""
+    for addrinfo in socket.getaddrinfo(None, port):
+        return addrinfo[4]
+    return ("", port)
 
 class BaseServer(socket.socket, threaded.Threaded):
     """base class for an interruptible server socket"""
     
-    def __init__(self, threaded_class = threaded.Threaded,
+    def __init__(self, address = None, backlog = 100, buflen = 512,
             event_class = event.DummyServerEvent,
-            event_handler_class = eventhandler.DummyHandler,
-            address = None, backlog = 100, buflen = 512, name = "base",
-            nthreads = -1, socket_event_function_name = None, timeout = 0.001,
+            event_handler_class = eventhandler.DummyHandler, name = "base",
+            nthreads = -1, socket_event_function_name = None,
+            threaded_class = threaded.Threaded, timeout = 0.001,
             type = socket.SOCK_DGRAM):
-        if not address: # determine the best default address
-            address = ("", 0)
-
-            for addrinfo in socket.getaddrinfo(None, 0):
-                address = addrinfo[4]
-                break
+        if not address: # use the best default address
+            address = best_address()
         af = socket.AF_INET # determine the address family
 
         if len(address) == 4:
@@ -55,8 +55,7 @@ class BaseServer(socket.socket, threaded.Threaded):
         self.backlog = backlog
         self.buflen = buflen
         self.event_class = event_class
-        self.event_handler_class = lambda e: eventhandler.PipeliningHandler(
-            event_handler_class(e)) # wrap with pipelining functionality
+        self.event_handler_class = event_handler_class
         self.name = name
         self.sleep = 1.0 / self.backlog # optimal value
         self.bind(address)
@@ -124,7 +123,7 @@ class BaseIterativeServer(BaseServer, threaded.Iterative):
             name = "base iterative", nthreads = -1,
             socket_event_function_name = None, timeout = 0.001,
             type = socket.SOCK_DGRAM):
-        BaseServer.__init__(self, address, backlog, buflen, event_class
+        BaseServer.__init__(self, address, backlog, buflen, event_class,
             event_handler_class, name, nthreads, socket_event_function_name,
             threaded.Iterative, timeout, type)
 
