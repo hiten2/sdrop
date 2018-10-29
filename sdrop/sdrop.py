@@ -22,6 +22,7 @@ import time
 import traceback
 
 from lib import baseserver
+from lib import conf
 
 __doc__ = "sdrop - a temporary file drop server"#############steps
 
@@ -398,4 +399,8 @@ class IterativeServer(baseserver.threaded.Iterative, Server):
             nthreads, root, baseserver.threaded.Iterative, timeout)
 
 if __name__ == "__main__":
-    Server(address = ("", 8000))()
+    config = conf.Conf(autosync = False)
+
+    #mkconfig
+    
+    Server(**config)()
