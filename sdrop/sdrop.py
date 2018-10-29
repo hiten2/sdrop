@@ -244,7 +244,7 @@ class GETHandler(RequestHandler):
                     fp.seek(-len(chunk), os.SEEK_CUR)
                     fp.write(os.urandom(len(chunk))) # shred
                     fp.flush()
-                    os.fdatasync(fp)
+                    os.fdatasync(fp.fileno())
                 except IOError:
                     break
                 
@@ -253,7 +253,7 @@ class GETHandler(RequestHandler):
                 except IOError:
                     break
                 content_length -= len(chunk)
-                time.sleep(self.server.sleep)
+                time.sleep(self.event.server.sleep)
             
             try:
                 os.unlink(path)
@@ -351,12 +351,9 @@ class HTTPConnectionHandler(baseserver.eventhandler.EventHandler):
                 RequestEvent(request, self.event.conn, self.event.remote,
                     self.event.server))()
         except Exception as e:
-            try:
-                self.event.server.sfprint(sys.stderr,
-                    "ERROR while handling connection with %s:\n" % address_string,
-                    traceback.format_exc())
-            except Exception as e:
-                print e
+            self.event.server.sfprint(sys.stderr,
+                "ERROR while handling connection with %s:\n" % address_string,
+                traceback.format_exc())
         finally:
             self.event.server.sprint("Closing connection with", address_string)
             self.event.conn.close()
@@ -372,26 +369,33 @@ class Server(baseserver.server.BaseTCPServer):
     connection timeouts default to None
     """
     
-    def __init__(self, event_class = baseserver.event.ConnectionEvent,
-            event_handler_class = HTTPConnectionHandler, address = None,
-            backlog = 100, buflen = 65536, conn_inactive = None,
-            conn_sleep = 0.001, isolate = True, name = "sdrop", nthreads = -1,
-            root = os.getcwd(), timeout = 0.001):
-        baseserver.server.BaseTCPServer.__init__(self, event_class,
-            event_handler_class, address, backlog, buflen, conn_inactive,
-            conn_sleep, name, nthreads, timeout)
+    def __init__(self, address = None, backlog = 100, buflen = 65536,
+            conn_inactive = None, conn_sleep = 0.001,
+            event_class = baseserver.event.ConnectionEvent,
+            event_handler_class = HTTPConnectionHandler, isolate = True,
+            name = "sdrop", nthreads = -1, root = os.getcwd(),
+            threaded_class = baseserver.threaded.Threaded, timeout = 0.001):
+        baseserver.server.BaseTCPServer.__init__(self, address, backlog,
+            buflen, conn_inactive, conn_sleep, event_class,
+            event_handler_class, name, nthreads, threaded_class, timeout)
         resolver = lambda r: r
         
         if isolate:
-            resolver = lambda r: os.path.normpath(r)
+            resolver = lambda r: os.path.normpath(r).lstrip('/')
         self.resolver = lambda r: os.path.join(root, resolver(r))
         self.root = root
         self.timeout = timeout
 
-class IterativeServer(Server, baseserver.server.threaded.Iterative):
-    def __init__(self, *args, **kwargs):
-        Server.__init__(self, *args, **kwargs)
-        baseserver.server.threaded.Iterative.__init__(self, self.nthreads)
+class IterativeServer(baseserver.threaded.Iterative, Server):
+    def __init__(self, address = None, backlog = 100, buflen = 65536,
+            conn_inactive = None, conn_sleep = 0.001,
+            event_class = baseserver.event.ConnectionEvent,
+            event_handler_class = HTTPConnectionHandler, isolate = True,
+            name = "sdrop", nthreads = -1, root = os.getcwd(),
+            timeout = 0.001):
+        Server.__init__(self, address, backlog, buflen, conn_inactive,
+            conn_sleep, event_class, event_handler_class, isolate, name,
+            nthreads, root, baseserver.threaded.Iterative, timeout)
 
 if __name__ == "__main__":
-    Server()()#address = ("", 8000))()
+    Server(address = ("", 8000))()
