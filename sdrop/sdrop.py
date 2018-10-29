@@ -339,7 +339,7 @@ class HTTPConnectionHandler(baseserver.eventhandler.EventHandler):
     
     def next(self):
         """parse an HTTP header and execute the appropriate handler"""
-        address_string = baseserver.straddress.straddress(self.event.remote)
+        address_string = baseserver.straddr.straddr(self.event.remote)
         request = Request()
         
         try:
