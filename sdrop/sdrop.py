@@ -334,73 +334,68 @@ class POSTHandler(RequestHandler):
                 pass
         RequestHandler.next(self) # send response header and stop iteration
 
-class HTTPConnectionHandler(baseserver.eventhandler.EventHandler):
+class ConnectionHandler(baseserver.eventhandler.EventHandler):
     METHOD_TO_HANDLER = {"GET": GETHandler, "POST": POSTHandler}
     
-    def next(self):
-        """parse an HTTP header and execute the appropriate handler"""
-        address_string = baseserver.straddr.straddr(self.event.remote)
+    def __init__(self, *args, **kwargs):
+        baseserver.eventhandler.EventHandler.__init__(self, *args, **kwargs)
         request = Request()
+        self.address_string = baseserver.straddr.straddr(self.event.remote)
+        self.request_handler = None
         
         try:
             self.event.conn.settimeout(self.event.server.timeout)
             request.fload(self.event.conn.makefile())
-
             self.event.server.sprint("Handling", request.method, "request for",
-                request.resource, "from", address_string)
-            HTTPConnectionHandler.METHOD_TO_HANDLER[request.method](
-                RequestEvent(request, self.event.conn, self.event.remote,
-                    self.event.server))()
-        except Exception as e:
+                request.resource, "from", self.address_string)
+            self.request_handler = ConnectionHandler.METHOD_TO_HANDLER[
+                request.method]( RequestEvent(request, self.event.conn,
+                    self.event.remote, self.event.server))
+        except KeyError: # method not supported
+            self.request_handler = None
+            _request_handler = RequestHandler(request, self.event.conn,
+                self.event.remote, self.event.server)
+            _request_handler.code = 501
+            _request_handler.status = "Not Supported"
+            _request_handler.respond()
+        except Exception:
             self.event.server.sfprint(sys.stderr,
-                "ERROR while handling connection with %s:\n" % address_string,
-                traceback.format_exc())
-        finally:
-            self.event.server.sprint("Closing connection with", address_string)
-            self.event.conn.close()
+                "ERROR while handling connection with %s:\n"
+                    % self.address_string, traceback.format_exc())
+            self.request_handler = None
+    
+    def next(self):
+        if self.event.server.alive.get() and self.request_handler:
+            try:
+                return self.request_handler.next()
+            except StopIteration:
+                pass
+            except Exception:
+                self.event.server.sfprint(sys.stderr,
+                    "ERROR while handling connection with %s:\n"
+                        % self.address_string, traceback.format_exc())
+        self.event.server.sprint("Closing connection with",
+            self.address_string)
+        self.event.conn.close()
         raise StopIteration()
 
-class Server(baseserver.server.BaseTCPServer):
-    """
-    simple, pure-python HTTP server
-
-    a POST is stored, and shredded then deleted after its initial GET
-
-    the timeout argument is only used for the server socket;
-    connection timeouts default to None
-    """
-    
-    def __init__(self, address = None, backlog = 100, buflen = 65536,
-            conn_inactive = None, conn_sleep = 0.001,
-            event_class = baseserver.event.ConnectionEvent,
-            event_handler_class = HTTPConnectionHandler, isolate = True,
-            name = "sdrop", nthreads = -1, root = os.getcwd(),
-            threaded_class = baseserver.threaded.Threaded, timeout = 0.001):
-        baseserver.server.BaseTCPServer.__init__(self, address, backlog,
-            buflen, conn_inactive, conn_sleep, event_class,
-            event_handler_class, name, nthreads, threaded_class, timeout)
+class Server(baseserver.server.BaseServer):
+    def __init__(self, event_handler_class = ConnectionHandler,
+            isolate = True, name = "sdrop", root = os.getcwd(), **kwargs):
+        baseserver.server.BaseServer.__init__(self, socket.SOCK_STREAM,
+            event_handler_class = event_handler_class, name = name, **kwargs)
         resolver = lambda r: r
         
         if isolate:
             resolver = lambda r: os.path.normpath(r).lstrip('/')
         self.resolver = lambda r: os.path.join(root, resolver(r))
         self.root = root
-        self.timeout = timeout
-
-class IterativeServer(baseserver.threaded.Iterative, Server):
-    def __init__(self, address = None, backlog = 100, buflen = 65536,
-            conn_inactive = None, conn_sleep = 0.001,
-            event_class = baseserver.event.ConnectionEvent,
-            event_handler_class = HTTPConnectionHandler, isolate = True,
-            name = "sdrop", nthreads = -1, root = os.getcwd(),
-            timeout = 0.001):
-        Server.__init__(self, address, backlog, buflen, conn_inactive,
-            conn_sleep, event_class, event_handler_class, isolate, name,
-            nthreads, root, baseserver.threaded.Iterative, timeout)
 
 if __name__ == "__main__":
     config = conf.Conf(autosync = False)
 
     #mkconfig
     
-    Server(**config)()
+    server = Server(address = ("::1", 8000, 0 , 0), **config)
+    server.thread(baseserver.threaded.Pipelining(nthreads = 1))
+    server()

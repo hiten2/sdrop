@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 __package__ = __name__
 
+from lib import conf
 import sdrop
 
 __doc__ = "sdrop - a temporary HTTP file sharing server"
