@@ -87,12 +87,14 @@ class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
                 fcntl.flock(self.fp.fileno(), fcntl.LOCK_UN)
             except IOError:
                 pass
+            self.locked = False
         
         if self.fp: # may not have been locked
             try:
                 self.fp.close()
             except (IOError, OSError):
                 pass
+            self.fp = None
 
             try:
                 os.unlink(self.path)
@@ -101,7 +103,9 @@ class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
         raise StopIteration()
 
 class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):######################################
-    def next(self):
+    def __init__(self, *args, **kwargs):
+        baseserver.basehttpserver.HTTPRequestHandler.__init__(self, *args,
+            **kwargs)
         content_length = -1
         
         try:
@@ -130,37 +134,39 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):################
             except IOError:
                 self.code = 500
                 self.message = "Internal Server Error"
-        
-        if locked: # fp is inherently open
-            while content_length:
+    
+    def next(self):
+        if self.locked:
+            if self.content_length: # fp is inherently open
                 try:
                     chunk = self.event.conn.recv(
                         baseserver.baseserver.http_bufsize(content_length))
+                    content_length -= len(chunk)
                 except socket.error:
-                    break
+                    return
 
                 try:
                     fp.write(chunk)
                     fp.flush()
                     os.fdatasync(fp.fileno())
+                    return
                 except IOError:
                     self.code = 500
                     self.message = "Internal Server Error"
-                    break
-                content_length -= len(chunk)
-                time.sleep(self.event.server.sleep)
             
             try:
-                fcntl.flock(fp.fileno(), fcntl.LOCK_UN)
+                fcntl.flock(self.fp.fileno(), fcntl.LOCK_UN)
             except IOError:
                 pass
+            self.locked = False
         
-        if fp: # may not have been locked
+        if self.fp: # may not have been locked
             try:
-                fp.close()
+                self.fp.close()
             except (IOError, OSError):
                 pass
-        RequestHandler.next(self) # send response header and stop iteration
+            self.fp = None
+        HTTPRequestHandler.next(self) # send response header and stop iteration
 
 baseserver.basehttpserver.HTTPConnectionHandler.METHOD_TO_HANDLER = {
     "GET": GETHandler, "POST": POSTHandler}
