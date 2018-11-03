@@ -106,31 +106,31 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):################
     def __init__(self, *args, **kwargs):
         baseserver.basehttpserver.HTTPRequestHandler.__init__(self, *args,
             **kwargs)
-        content_length = -1
+        self.content_length = -1
         
         try:
-            content_length = self.event.request.headers["content-length"]
+            self.content_length = self.event.request.headers["content-length"]
         except KeyError:
             self.code = 411
             self.message = "Length Required"
-        fp = None
-        locked = False
-        path = self.event.server.resolver(self.event.request.resource)
+        self.fp = None
+        self.locked = False
+        self.path = self.event.server.resolver(self.event.request.resource)
         
-        if os.path.exists(path):
+        if os.path.exists(self.path):
             self.code = 409
             self.message = "Conflict"
-        elif content_length > -1: # we're actually receiving a file
+        elif self.content_length > -1: # we're actually receiving a file
             try:
-                fp = open(path, "wb")
+                self.fp = open(self.path, "wb")
             except (IOError, OSError):
                 self.code = 500
                 self.message = "Internal Server Error"
         
-        if fp: # path is inherently nonexistent
+        if self.fp: # path is inherently nonexistent
             try:
-                fcntl.flock(fp.fileno(), fcntl.LOCK_EX)
-                locked = True
+                fcntl.flock(self.fp.fileno(), fcntl.LOCK_EX)
+                self.locked = True
             except IOError:
                 self.code = 500
                 self.message = "Internal Server Error"
@@ -140,15 +140,16 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):################
             if self.content_length: # fp is inherently open
                 try:
                     chunk = self.event.conn.recv(
-                        baseserver.baseserver.http_bufsize(content_length))
-                    content_length -= len(chunk)
+                        baseserver.basehttpserver.http_bufsize(
+                            self.content_length))
+                    self.content_length -= len(chunk)
                 except socket.error:
                     return
 
                 try:
-                    fp.write(chunk)
-                    fp.flush()
-                    os.fdatasync(fp.fileno())
+                    self.fp.write(chunk)
+                    self.fp.flush()
+                    os.fdatasync(self.fp.fileno())
                     return
                 except IOError:
                     self.code = 500
@@ -166,7 +167,7 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):################
             except (IOError, OSError):
                 pass
             self.fp = None
-        HTTPRequestHandler.next(self) # send response header and stop iteration
+        baseserver.basehttpserver.HTTPRequestHandler.next(self) # respond/close
 
 baseserver.basehttpserver.HTTPConnectionHandler.METHOD_TO_HANDLER = {
     "GET": GETHandler, "POST": POSTHandler}
