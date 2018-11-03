@@ -17,7 +17,6 @@ import fcntl
 import os
 import socket
 import sys
-import time
 
 from lib import baseserver
 from lib import conf
