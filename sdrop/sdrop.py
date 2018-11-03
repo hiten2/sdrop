@@ -22,7 +22,7 @@ import time
 from lib import baseserver
 from lib import conf
 
-__doc__ = "sdrop - a temporary file drop server"#############steps
+__doc__ = "sdrop - a temporary file drop server"
 
 class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
     """identical to its parent, though it shreds and unlinks the resource"""
@@ -102,7 +102,7 @@ class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
                 pass
         raise StopIteration()
 
-class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):######################################
+class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         baseserver.basehttpserver.HTTPRequestHandler.__init__(self, *args,
             **kwargs)
