@@ -191,7 +191,10 @@ class HTTPRequestHandler(eventhandler.EventHandler):
         self.message = "OK"
 
     def next(self):
-        self.respond()
+        try:
+            self.respond()
+        except socket.error:
+            pass
         raise StopIteration()
 
     def respond(self):
@@ -260,6 +263,25 @@ class GETHandler(HTTPRequestHandler):
             self.fp = None
         raise StopIteration()
 
+class HEADHandler(HTTPRequestHandler):
+    def next(self):
+        path = self.event.server.resolver(self.event.request.resource)
+        
+        if os.path.exists(path) and not os.path.isdir(path):
+            try:
+                with open(path, "rb") as fp:
+                    fcntl.flock(fp.fileno(), fcntl.LOCK_EX)
+                    fp.seek(0, os.SEEK_END)
+                    self.headers["content-length"] = fp.tell()
+                    fcntl.flock(fp.fileno(), fcntl.LOCK_UN)
+            except (IOError, OSError):
+                self.code = 500
+                self.message = "Internal Server Error"
+        else:
+            self.code = 404
+            self.message = "Not Found"
+        HTTPRequestHandler.next(self) # respond/stop
+
 class HTTPConnectionHandler(eventhandler.EventHandler):
     """
     parse an HTTP header and execute the appropriate handler
@@ -270,7 +292,7 @@ class HTTPConnectionHandler(eventhandler.EventHandler):
     different types of requests
     """
     
-    METHOD_TO_HANDLER = {"GET": GETHandler}
+    METHOD_TO_HANDLER = {"GET": GETHandler, "HEAD": HEADHandler}
     
     def __init__(self, *args, **kwargs):
         eventhandler.EventHandler.__init__(self, *args, **kwargs)
@@ -317,9 +339,15 @@ class HTTPConnectionHandler(eventhandler.EventHandler):
                         % self.address_string, traceback.format_exc())
         self.event.server.sprint("Closing connection with",
             self.address_string)
-        self.event.conn.close()
+
+        for f in (lambda: self.event.conn.shutdown(socket.SHUT_RDWR),
+                self.event.conn.close):
+            try:
+                f()
+            except socket.error:
+                pass
         self.request_handler = None
-        raise StopIteration()
+        eventhandler.ConnectionHandler.next(self) # shutdown, close, and stop
 
 class BaseHTTPServer(baseserver.BaseServer):
     """

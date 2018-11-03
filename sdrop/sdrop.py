@@ -166,10 +166,10 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):
             except (IOError, OSError):
                 pass
             self.fp = None
-        baseserver.basehttpserver.HTTPRequestHandler.next(self) # respond/close
+        baseserver.basehttpserver.HTTPRequestHandler.next(self) # respond/stop
 
-baseserver.basehttpserver.HTTPConnectionHandler.METHOD_TO_HANDLER = {
-    "GET": GETHandler, "POST": POSTHandler}
+for k, v in (("GET", GETHandler), ("POST", POSTHandler)):
+    baseserver.basehttpserver.HTTPConnectionHandler.METHOD_TO_HANDLER[k] = v
 
 class SDropServer(baseserver.basehttpserver.BaseHTTPServer):
     def __init__(self, name = "sdrop", **kwargs):
