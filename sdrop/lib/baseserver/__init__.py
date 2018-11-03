@@ -15,10 +15,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 __package__ = __name__
 
+import basehttpserver
+import baseserver
 import event
 import eventhandler
 from lib import threaded
-import server
 import straddr
 
 __doc__ = """
