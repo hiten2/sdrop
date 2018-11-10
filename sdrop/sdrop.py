@@ -177,7 +177,7 @@ class SDropServer(baseserver.basehttpserver.BaseHTTPServer):
             **kwargs)
 
 if __name__ == "__main__":
-    config = conf.Conf(autosync = False)
+    config = conf.Conf()
     
     #mkconfig
     
