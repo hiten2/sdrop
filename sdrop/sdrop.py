@@ -178,9 +178,10 @@ class SDropServer(baseserver.basehttpserver.BaseHTTPServer):
 
 if __name__ == "__main__":
     config = conf.Conf()
+    config.append(conf.Section())
     
     #mkconfig
     
-    server = SDropServer(address = ("::1", 8000, 0 , 0), **config)
+    server = SDropServer(address = ("::1", 8000, 0 , 0), **config[0])
     server.thread(baseserver.threaded.Pipelining(nthreads = 1))
     server()
