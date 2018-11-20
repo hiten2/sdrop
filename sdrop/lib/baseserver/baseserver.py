@@ -101,6 +101,7 @@ class BaseServer(socket.socket):
             raise ValueError("socket_event_function_name is unusable")
         self.stderr = stderr
         self.stdout = stdout
+        self.threaded = None
     
     def __call__(self, max_events = -1, cleanup = True):
         if self.type == socket.SOCK_STREAM:
@@ -138,6 +139,9 @@ class BaseServer(socket.socket):
         """kill the server gracefully"""
         self.alive.set(False)
 
+        if self.threaded and hasattr(self.threaded, "kill_all"):
+            self.threaded.kill_all()
+
     def next(self):
         """generate events"""
         while 1:
@@ -166,7 +170,7 @@ class BaseServer(socket.socket):
         """synchronized print to stderr"""
         self.sfprint(self.stderr, *args)
 
-    def thread(self, _threaded, maintain_callback = False):
+    def thread(self, threaded, maintain_callback = False):
         """
         add a threaded component to server
 
@@ -175,6 +179,7 @@ class BaseServer(socket.socket):
         the default behavior)
         """
         if maintain_callback: # executes the callback on the handler
-            self.callback = lambda h: _threaded.execute(self.callback, h)
+            self.callback = lambda h: threaded.execute(self.callback, h)
         else: # executes the handler
-            self.callback = _threaded.execute
+            self.callback = threaded.execute
+        self.threaded = threaded
