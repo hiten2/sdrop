@@ -122,25 +122,25 @@ class BaseServer(socket.socket):
         finally:
             self.sprint("Closing", self.name,
                 "server on %s..." % address_string)
-            self.kill()
+            self.close(cleanup)
 
-            if cleanup:
-                self.cleanup()
+    def close(self, cleanup = True):
+        """
+        close the server gracefully
 
-    def cleanup(self):
-        """free up associated resources"""
-        self.shutdown(socket.SHUT_RDWR)
-        self.close()
+        if cleanup is True, kill any threaded component
+        and free up the socket resource
+        """
+        self.alive.set(False)
+        
+        if cleanup:
+            if self.threaded and hasattr(self.threaded, "kill_all"):
+                self.threaded.kill_all()
+            self.shutdown(socket.SHUT_RDWR)
+            self.close()
 
     def __iter__(self):
         return self
-
-    def kill(self):
-        """kill the server gracefully"""
-        self.alive.set(False)
-
-        if self.threaded and hasattr(self.threaded, "kill_all"):
-            self.threaded.kill_all()
 
     def next(self):
         """generate events"""
