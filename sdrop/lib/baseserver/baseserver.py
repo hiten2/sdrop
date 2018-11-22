@@ -25,6 +25,29 @@ from lib import threaded
 
 __doc__ = "an extensible socket server implementation"
 
+class SocketConfig:
+    ADDRESS = addr.best()
+    BUFLEN = 65536
+    DETECTION_TIMEOUT = 0.001
+    GENERATING_ATTR = None
+    GENERATING_ATTR_ARGS = ()
+    GENERATING_ATTR_KWARGS = {}
+    SLEEP = 0.001
+    TIMEOUT = 0.001
+    TYPE = socket.SOCK_RAW
+
+class TCPConfig(SocketConfig):
+    BACKLOG = 100
+    GENERATING_ATTR = "accept"
+    INACTIVE_TIMEOUT = None # guideline for handlers
+    SLEEP = 0.01
+    TYPE = socket.SOCK_STREAM
+
+class UDPConfig(SocketConfig):
+    GENERATING_ATTR = "recvfrom"
+    GENERATING_ATTR_ARGS = (SocketConfig.BUFLEN, )
+    TYPE = socket.SOCK_DGRAM
+
 class BaseServer:
     """
     the base class for a socket server;
@@ -41,11 +64,9 @@ class BaseServer:
     PREFIX = "[*]"
 
     def __init__(self, event_class = None, handler_class = None,
-            sock_config = None, stderr = sys.stderr, stdout = sys.stdout):
-        if not sock_config:
-            sock_config = SocketConfig()
-        elif not isinstance(sock_config, SocketConfig):
-            raise TypeError("sock_config must be a SocketConfig instance")
+            sock_config = SocketConfig, stderr = sys.stderr, stdout = sys.stdout):
+        if not isinstance(sock_config(), SocketConfig):
+            raise TypeError("sock_config must inherit from SocketConfig")
         af = socket.AF_INET
 
         if len(sock_config.ADDRESS) == 4:
@@ -170,43 +191,18 @@ class BaseServer:
         if _threaded:
             setattr(self, "_threaded", _threaded)
 
-def BaseTCPServer(handler_class = None, sock_config = None, *args, **kwargs):
+def BaseTCPServer(handler_class = None, sock_config = TCPConfig, *args,
+        **kwargs):
     """factory function for a TCP server"""
-    if not sock_config:
-        sock_config = TCPSockConfig()
-    elif not isinstance(sock_config, TCPConfig):
-        raise TypeError("sock_config must be a TCPConfig instance")
+    if not isinstance(sock_config(), TCPConfig):
+        raise TypeError("sock_config must inherit from TCPConfig")
     return BaseServer(event.ConnectionEvent, handler_class, sock_config,
         *args, **kwargs)
 
-def BaseUDPServer(handler_class = None, sock_config = None, *args, **kwargs):
+def BaseUDPServer(handler_class = None, sock_config = UDPConfig, *args,
+        **kwargs):
     """factory function for a UDP server"""
-    if not sock_config:
-        sock_config = UDPSockConfig()
-    elif not isinstance(sock_config, UDPConfig):
-        raise TypeError("sock_config must be a UDPConfig instance")
+    if not isinstance(sock_config(), UDPConfig):
+        raise TypeError("sock_config must inherit from UDPConfig")
     return BaseServer(event.DatagramEvent, handler_class, sock_config,
         *args, **kwargs)
-
-class SocketConfig:
-    ADDRESS = addr.best()
-    BUFLEN = 65536
-    DETECTION_TIMEOUT = 0.001
-    GENERATING_ATTR = None
-    GENERATING_ATTR_ARGS = ()
-    GENERATING_ATTR_KWARGS = {}
-    SLEEP = 0.001
-    TIMEOUT = 0.001
-    TYPE = socket.SOCK_RAW
-
-class TCPConfig(SocketConfig):
-    BACKLOG = 100
-    GENERATING_ATTR = "accept"
-    INACTIVE_TIMEOUT = None # guideline for handlers
-    SLEEP = 0.01
-    TYPE = socket.SOCK_STREAM
-
-class UDPConfig(SocketConfig):
-    GENERATING_ATTR = "recvfrom"
-    GENERATING_ATTR_ARGS = (SocketConfig.BUFLEN, )
-    TYPE = socket.SOCK_DGRAM

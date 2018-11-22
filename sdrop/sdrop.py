@@ -173,11 +173,11 @@ class SDropServer(baseserver.BaseHTTPServer):
         baseserver.BaseHTTPServer.__init__(self, *args, **kwargs)
 
 if __name__ == "__main__":
-    class config(baseserver.TCPConfig):
+    class AddressConfig(baseserver.TCPConfig):
         ADDRESS = ("::1", 8000, 0 , 0)
     
     #mkconfig
     
-    server = SDropServer(sock_config = config())
+    server = SDropServer(sock_config = AddressConfig)
     server.thread(baseserver.threaded.Pipelining(nthreads = 1))
     server()
