@@ -23,16 +23,16 @@ from lib import conf
 
 __doc__ = "sdrop - a temporary file drop server"
 
-class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
+class GETHandler(baseserver.HTTPRequestHandler):
     """identical to its parent, though it shreds and unlinks the resource"""
     
     def __init__(self, *args, **kwargs):
-        baseserver.basehttpserver.HTTPRequestHandler.__init__(self, *args,
+        baseserver.HTTPRequestHandler.__init__(self, *args,
             **kwargs)
         self.content_length = -1
         self.fp = None
         self.locked = False
-        self.path = self.event.server.resolver(self.event.request.resource)
+        self.path = self.event.server.resolve(self.event.request.resource)
         
         if os.path.exists(self.path) and not os.path.isdir(self.path):
             try:
@@ -57,7 +57,7 @@ class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
                 self.message = "Internal Server Error"
 
         try: # send response header
-            baseserver.basehttpserver.HTTPRequestHandler.respond(self)
+            baseserver.HTTPRequestHandler.respond(self)
         except socket.error: # the file will eventually be closed
             self.locked = False
 
@@ -66,8 +66,7 @@ class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
             if self.content_length: # fp is inherently open
                 try:
                     chunk = self.fp.read(
-                        baseserver.basehttpserver.http_bufsize(
-                            self.content_length))
+                        baseserver.http_bufsize(self.content_length))
                     self.content_length -= len(chunk)
                     self.fp.seek(-len(chunk))
                     self.fp.write(os.urandom(len(chunk)))
@@ -101,10 +100,9 @@ class GETHandler(baseserver.basehttpserver.HTTPRequestHandler):
                 pass
         raise StopIteration()
 
-class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):
+class POSTHandler(baseserver.HTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        baseserver.basehttpserver.HTTPRequestHandler.__init__(self, *args,
-            **kwargs)
+        baseserver.HTTPRequestHandler.__init__(self, *args, **kwargs)
         self.content_length = -1
         
         try:
@@ -114,7 +112,7 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):
             self.message = "Length Required"
         self.fp = None
         self.locked = False
-        self.path = self.event.server.resolver(self.event.request.resource)
+        self.path = self.event.server.resolve(self.event.request.resource)
         
         if os.path.exists(self.path):
             self.code = 409
@@ -139,8 +137,7 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):
             if self.content_length: # fp is inherently open
                 try:
                     chunk = self.event.conn.recv(
-                        baseserver.basehttpserver.http_bufsize(
-                            self.content_length))
+                        baseserver.http_bufsize(self.content_length))
                     self.content_length -= len(chunk)
                 except socket.error:
                     return
@@ -166,22 +163,21 @@ class POSTHandler(baseserver.basehttpserver.HTTPRequestHandler):
             except (IOError, OSError):
                 pass
             self.fp = None
-        baseserver.basehttpserver.HTTPRequestHandler.next(self) # respond/stop
+        baseserver.HTTPRequestHandler.next(self) # respond/stop
 
 for k, v in (("GET", GETHandler), ("POST", POSTHandler)):
-    baseserver.basehttpserver.HTTPConnectionHandler.METHOD_TO_HANDLER[k] = v
+    baseserver.HTTPConnectionHandler.METHOD_TO_HANDLER[k] = v
 
-class SDropServer(baseserver.basehttpserver.BaseHTTPServer):
-    def __init__(self, name = "sdrop", **kwargs):
-        baseserver.basehttpserver.BaseHTTPServer.__init__(self, name = name,
-            **kwargs)
+class SDropServer(baseserver.BaseHTTPServer):
+    def __init__(self, *args, **kwargs):
+        baseserver.BaseHTTPServer.__init__(self, *args, **kwargs)
 
 if __name__ == "__main__":
-    config = conf.Conf()
-    config.append(conf.Section())
+    class config(baseserver.TCPConfig):
+        ADDRESS = ("::1", 8000, 0 , 0)
     
     #mkconfig
     
-    server = SDropServer(address = ("::1", 8000, 0 , 0), **config[0])
+    server = SDropServer(sock_config = config())
     server.thread(baseserver.threaded.Pipelining(nthreads = 1))
     server()
